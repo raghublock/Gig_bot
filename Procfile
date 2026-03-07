@@ -1,0 +1,1 @@
+worker: python proposal_bot.py
