@@ -28,7 +28,10 @@ from telegram.ext import (
 # CONFIG
 # ──────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_KEY     = os.environ.get("GEMINI_KEY")
+# 4 Gemini Keys — Auto Rotate
+GEMINI_KEYS = [os.environ.get("GEMINI_KEY_1"), os.environ.get("GEMINI_KEY_2"), os.environ.get("GEMINI_KEY_3"), os.environ.get("GEMINI_KEY_4")]
+GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
+_key_index = [0]  # list mein rakha taaki function update kar sake
 
 # Alert interval — har 2 ghante mein check karega
 ALERT_INTERVAL = 7200  # seconds
@@ -157,13 +160,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────
-# GEMINI SETUP
+# GEMINI SETUP — 4 Keys Auto Rotate
 # ──────────────────────────────────────────
 def ask_gemini(prompt: str) -> str:
-    genai.configure(api_key=GEMINI_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-    return response.text
+    # Sab keys try karo ek ek karke
+    for attempt in range(len(GEMINI_KEYS)):
+        try:
+            key = GEMINI_KEYS[_key_index[0] % len(GEMINI_KEYS)]
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel("gemini-2.0-flash-lite")
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "quota" in error_str.lower():
+                # Quota khatam — next key try karo
+                _key_index[0] += 1
+                logger.warning(f"Key quota khatam, next key try kar raha hoon...")
+                continue
+            else:
+                raise e
+    raise Exception("Sab 4 keys ka quota khatam! Kal dobara try karo.")
 
 # ──────────────────────────────────────────
 # JOB SEARCH — LATEST ONLY
@@ -690,8 +707,10 @@ _FREE — Powered by Google Gemini 🆓_
 # MAIN
 # ──────────────────────────────────────────
 def main():
-    if not TELEGRAM_TOKEN or not GEMINI_KEY:
-        raise ValueError("TELEGRAM_TOKEN aur GEMINI_KEY Railway Variables mein set karo!")
+    if not TELEGRAM_TOKEN:
+        raise ValueError("TELEGRAM_TOKEN Railway Variables mein set karo!")
+    if not GEMINI_KEYS:
+        raise ValueError("Kam se kam ek GEMINI_KEY_1 Railway Variables mein set karo!")
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
