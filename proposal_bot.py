@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🤖 Raghu's AI Job Bot v5.0
+🤖 Raghuveer's AI Job Bot v5.0
 FREE - Google Gemini API
 Features:
 - Latest jobs ONLY (24 hours filter)
@@ -10,6 +10,7 @@ Features:
 - Job match analysis
 - All roles including freelance + sponsorship
 """
+
 import os
 import logging
 import requests
@@ -160,7 +161,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────
 def ask_gemini(prompt: str) -> str:
     genai.configure(api_key=GEMINI_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
     return response.text
 
@@ -732,4 +733,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
