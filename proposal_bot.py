@@ -10,7 +10,6 @@ Features:
 - Job match analysis
 - All roles including freelance + sponsorship
 """
-
 import os
 import logging
 import requests
@@ -733,3 +732,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
