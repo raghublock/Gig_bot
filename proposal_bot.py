@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """
-🤖 Raghuveer's AI Proposal Bot
-Fiverr + Upwork ke liye auto proposals generate karta hai
-Claude AI use karta hai
-
-Setup:
-1. pip install python-telegram-bot anthropic
-2. TELEGRAM_TOKEN aur ANTHROPIC_API_KEY set karo
-3. python proposal_bot.py
+🤖 Raghuveer's AI Job Application Bot
+- Upwork/Fiverr proposals generate karta hai
+- Job links se cover letters banata hai
+- Resume se tailored applications
 """
 
-import logging
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -20,33 +16,80 @@ from telegram.ext import (
 import anthropic
 
 # ──────────────────────────────────────────
-# CONFIG — Yahan apni keys daalo
+# CONFIG
 # ──────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_KEY")
-ALLOWED_USER_ID = 0  # Apna Telegram user ID daalo (security ke liye)
 
-# Raghuveer ka profile — proposal mein use hoga
-DEVELOPER_PROFILE = """
-Name: Raghuveer Bhati
-Skills: React, Node.js, Python, HTML/CSS, Cloudflare Workers, AI/ML tools
-Experience: Full Stack Web Developer & Blockchain Tester (Oct 2019 - Present)
-Projects:
-- Laxmi Library Fee System (React + TailwindCSS + Cloudflare)
-- Student Fees Management Dashboard (HTML/JS + Cloudflare Workers)
-- AI PDF Editor (Python + Streamlit)
-- Veggie Shop E-commerce (EJS + Node.js)
-- Free BG Remover (HTML/JS + Python Rembg API)
-- Hindi Typing Master (HTML/CSS/JS)
-Portfolio: https://raghublock.github.io/portfolio
-GitHub: https://github.com/raghublock
-Location: Bikaner, India
+# ──────────────────────────────────────────
+# RAGHUVEER KA POORA RESUME DATA
+# ──────────────────────────────────────────
+RESUME = """
+NAME: Raghuveer Bhati
+LOCATION: Bikaner, Rajasthan, India
+PORTFOLIO: https://raghublock.github.io/portfolio
+GITHUB: https://github.com/raghublock
+LINKEDIN: https://in.linkedin.com/in/raghuveer-bhati-94a37aa9
+
+TITLE: Full Stack Web Developer | Blockchain Tester | AI Tools Developer
+
+EDUCATION:
+- B.Tech in Electronics & Communication Engineering (ECE)
+- B.Sc in Biology
+- B.Ed in Science
+- RSCIT Certified (VMOU 2017)
+
+EXPERIENCE:
+1. Freelancer – Website Developer (Sep 2024 - Present), Bikaner
+   - Built AI-powered Background Remover (Python + Rembg API)
+   - Built AI PDF Editor with OCR (Python + Streamlit) — aipdfedit.streamlit.app
+   - Built Library Fee Management System (React + TailwindCSS + Cloudflare)
+   - Built Student Fees Management Dashboard (HTML/JS + Cloudflare Workers)
+   - Built Veggie Shop E-commerce (Node.js + EJS + Render)
+   - Built Hindi & English Typing Master apps (HTML/CSS/JS)
+   - Built PDF Compression tool and Image Master Tool
+   - Built NoteList PWA with Firebase (offline support)
+
+2. Freelancer – Web3 & Blockchain (Aug 2019 - Present), Bikaner
+   - Early ecosystem tester: Aptos, Arbitrum, Sui, Linea testnets
+   - IPFS decentralized hosting experience
+   - Web3 domain management (Unstoppable Domains)
+   - Smart contract interaction & dApps testing
+   - Cryptocurrency futures trading & on-chain analysis
+
+3. Accounts Clerk – Army Headquarters (1 year)
+   - Managed financial ledgers & audit board proceedings
+   - Zero-error fund management
+   - Handled sensitive government financial data
+
+TECHNICAL SKILLS:
+- Frontend: React.js, Next.js, HTML5, CSS3, TailwindCSS, JavaScript (Advanced)
+- Backend: Node.js, Express.js, EJS
+- Database: MongoDB, PostgreSQL, Firebase, Cloudflare Workers
+- AI/ML: Python, Streamlit, OpenAI API, OCR, Rembg
+- Blockchain: Web3.js, IPFS, testnet operations, Rust (Intermediate)
+- Tools: Git/GitHub, Vercel, Render, GitHub Pages, VS Code
+
+LIVE PROJECTS:
+1. Laxmi Library Fee System — raghublock.github.io/library-fee/
+2. Student Fees Management — student-fees-management.pages.dev/
+3. AI PDF Editor — aipdfedit.streamlit.app/
+4. Veggie Shop — veggie-shop-lgvy.onrender.com/
+5. Free BG Remover — raghublock.github.io/free-bg-remover/
+6. Hindi Typing Master — raghublock.github.io/hindi-typing-master/
+7. NoteList App — raghublock.github.io/notelist/
+
+STRENGTHS:
+- Army background: disciplined, zero-error mindset
+- Self-taught across Web Dev, Web3, and AI
+- 5+ years blockchain experience
+- Builds real tools used by real local businesses
 """
 
 # ──────────────────────────────────────────
 # CONVERSATION STATES
 # ──────────────────────────────────────────
-CHOOSING_PLATFORM, GETTING_JOB_DESC, GETTING_BUDGET = range(3)
+CHOOSING_TYPE, GETTING_INPUT, GETTING_BUDGET = range(3)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -55,53 +98,41 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────
-# AI PROPOSAL GENERATOR
+# AI FUNCTIONS
 # ──────────────────────────────────────────
 def generate_proposal(platform: str, job_desc: str, budget: str) -> str:
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
     if platform == "fiverr":
-        style = """
-        - Short aur punchy (150-200 words max)
-        - Pehli line client ki problem solve karne wali ho
-        - 3 bullet points mein kya deliver karoge
-        - Call to action at end
-        - Friendly tone
-        """
-    else:  # upwork
-        style = """
-        - Professional aur detailed (200-300 words)
-        - Pehle client ki requirement repeat karo (shows you read it)
-        - Relevant experience mention karo
-        - Timeline aur deliverables clear karo
-        - Budget ke baare mein confident raho
-        - End mein question poochho (engagement badhata hai)
-        """
+        instruction = """
+Write a SHORT Fiverr proposal (150-180 words):
+- First line: directly address client's problem
+- Middle: mention 1-2 RELEVANT projects from resume with live links
+- End: clear call to action
+- Friendly, confident tone
+"""
+    else:
+        instruction = """
+Write a professional Upwork proposal (220-260 words):
+- Start by repeating client's specific need
+- Mention relevant experience + project links
+- Give a brief 3-step plan
+- Mention timeline
+- End with ONE specific question about their project
+"""
 
     prompt = f"""
-Tu Raghuveer Bhati hai, ek experienced Full Stack Developer from Bikaner, India.
+You are writing as Raghuveer Bhati. His resume:
+{RESUME}
 
-Tera profile:
-{DEVELOPER_PROFILE}
+Write a {platform.upper()} proposal for this job:
+JOB: {job_desc}
+BUDGET: {budget}
 
-Ab tu ek {platform.upper()} proposal likhega is job ke liye:
+{instruction}
 
-JOB DESCRIPTION:
-{job_desc}
-
-CLIENT KA BUDGET: {budget}
-
-Proposal writing style:
-{style}
-
-IMPORTANT:
-- English mein likho (professional)
-- Generic mat likho — job description ke specific points address karo
-- Apne REAL projects mention karo jo relevant hain
-- Portfolio link zaroor daalo
-- Natural aur human-like lagni chahiye proposal
-
-Sirf proposal text do, koi explanation nahi.
+Include portfolio: https://raghublock.github.io/portfolio
+Sound human and specific. Only output proposal text.
 """
 
     message = client.messages.create(
@@ -109,205 +140,264 @@ Sirf proposal text do, koi explanation nahi.
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )
-
     return message.content[0].text
+
+
+def generate_cover_letter(job_desc: str, company: str = "") -> str:
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+    prompt = f"""
+You are writing as Raghuveer Bhati. His resume:
+{RESUME}
+
+Write a cover letter for:
+JOB: {job_desc}
+COMPANY: {company if company else "the company"}
+
+Requirements:
+- 3 paragraphs, 200-250 words total
+- Para 1: Why excited about THIS role specifically
+- Para 2: 2 specific relevant projects with results
+- Para 3: What you'll bring + call to action
+- Include portfolio link naturally
+- Professional but genuine tone
+
+Only output the cover letter.
+"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text
+
+
+def analyze_job_match(job_desc: str) -> str:
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+    prompt = f"""
+Based on Raghuveer Bhati's resume:
+{RESUME}
+
+Analyze this job and give:
+1. Match Score (0-100%)
+2. Top 3 matching skills
+3. Any gaps
+4. Apply? Yes/Maybe/No + reason
+
+JOB: {job_desc}
+
+Be direct. Under 150 words.
+"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text
+
 
 # ──────────────────────────────────────────
 # BOT HANDLERS
 # ──────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bot start command"""
-    user_id = update.effective_user.id
-
-    # Security check
-    if ALLOWED_USER_ID != 0 and user_id != ALLOWED_USER_ID:
-        await update.message.reply_text("❌ Unauthorized!")
-        return ConversationHandler.END
-
     welcome = """
-🤖 *Raghuveer's AI Proposal Bot*
+🤖 *Raghuveer's AI Job Bot*
 
-Namaste! Main tumhare liye Fiverr aur Upwork proposals automatically generate karta hoon.
+Main tumhare liye:
+✅ Fiverr proposals likhta hoon
+✅ Upwork proposals likhta hoon
+✅ Cover letters banata hoon
+✅ Job match analyze karta hoon
 
 *Commands:*
-/proposal — Naya proposal banao
-/help — Help dekho
-/cancel — Koi bhi step cancel karo
-
-Ab `/proposal` type karo aur shuru karte hain! 🚀
+/proposal — Fiverr/Upwork proposal
+/cover — Cover letter banao
+/match — Job match check karo
+/help — Sab commands
 """
     await update.message.reply_text(welcome, parse_mode="Markdown")
 
 
 async def proposal_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Proposal generation shuru karo"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🟢 Fiverr", callback_data="fiverr"),
-            InlineKeyboardButton("🔵 Upwork", callback_data="upwork"),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
+    keyboard = [[
+        InlineKeyboardButton("🟢 Fiverr", callback_data="prop_fiverr"),
+        InlineKeyboardButton("🔵 Upwork", callback_data="prop_upwork"),
+    ]]
     await update.message.reply_text(
-        "📋 *Platform select karo:*\n\nKahan ke liye proposal chahiye?",
-        reply_markup=reply_markup,
+        "📋 *Kahan ke liye proposal chahiye?*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
-    return CHOOSING_PLATFORM
+    return CHOOSING_TYPE
 
 
-async def platform_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Platform select ho gaya"""
+async def cover_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["mode"] = "cover"
+    await update.message.reply_text(
+        "📝 *Cover Letter*\n\nJob description paste karo:\n_(Pehli line mein company name likho — optional)_",
+        parse_mode="Markdown"
+    )
+    return GETTING_INPUT
+
+
+async def match_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["mode"] = "match"
+    await update.message.reply_text(
+        "🎯 *Job Match Check*\n\nJob description paste karo:",
+        parse_mode="Markdown"
+    )
+    return GETTING_INPUT
+
+
+async def type_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    platform = query.data
-    context.user_data["platform"] = platform
-
-    platform_name = "Fiverr 🟢" if platform == "fiverr" else "Upwork 🔵"
+    if query.data == "prop_fiverr":
+        context.user_data["mode"] = "fiverr"
+        platform = "Fiverr 🟢"
+    else:
+        context.user_data["mode"] = "upwork"
+        platform = "Upwork 🔵"
 
     await query.edit_message_text(
-        f"✅ Platform: *{platform_name}*\n\n"
-        f"📝 *Job description paste karo:*\n\n"
-        f"_Client ne jo likha hai woh copy-paste karo yahan_",
+        f"✅ *{platform}*\n\n📝 Job description paste karo:",
         parse_mode="Markdown"
     )
-    return GETTING_JOB_DESC
+    return GETTING_INPUT
 
 
-async def job_desc_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Job description mili"""
+async def input_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode", "upwork")
     context.user_data["job_desc"] = update.message.text
 
-    await update.message.reply_text(
-        "💰 *Client ka budget kya hai?*\n\n"
-        "_Example: $50, $200, Not specified, etc._",
-        parse_mode="Markdown"
-    )
-    return GETTING_BUDGET
+    if mode in ["fiverr", "upwork"]:
+        await update.message.reply_text(
+            "💰 *Client ka budget?*\n_Example: $50, $200, Not specified_",
+            parse_mode="Markdown"
+        )
+        return GETTING_BUDGET
+    else:
+        await process_generation(update, context)
+        return ConversationHandler.END
 
 
 async def budget_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Budget mila — ab proposal generate karo"""
-    budget = update.message.text
-    platform = context.user_data["platform"]
-    job_desc = context.user_data["job_desc"]
+    context.user_data["budget"] = update.message.text
+    await process_generation(update, context)
+    return ConversationHandler.END
 
-    # Loading message
-    loading_msg = await update.message.reply_text(
-        "⏳ *AI proposal generate kar raha hai...*\n\n"
-        "_10-15 seconds lagenge_",
+
+async def process_generation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode")
+    job_desc = context.user_data.get("job_desc", "")
+    budget = context.user_data.get("budget", "Not specified")
+
+    loading = await update.message.reply_text(
+        "⏳ *AI kaam kar raha hai... 10-15 sec*",
         parse_mode="Markdown"
     )
 
     try:
-        proposal = generate_proposal(platform, job_desc, budget)
+        if mode in ["fiverr", "upwork"]:
+            result = generate_proposal(mode, job_desc, budget)
+            header = f"✅ *{mode.upper()} PROPOSAL READY!*\n━━━━━━━━━━━━\n\n"
+            footer = "\n\n━━━━━━━━━━━━\n📋 _Copy karo aur paste karo!_"
 
-        # Loading message delete karo
-        await loading_msg.delete()
+        elif mode == "cover":
+            lines = job_desc.split('\n')
+            company = lines[0] if len(lines) > 1 else ""
+            desc = '\n'.join(lines[1:]) if len(lines) > 1 else job_desc
+            result = generate_cover_letter(desc, company)
+            header = "✅ *COVER LETTER READY!*\n━━━━━━━━━━━━\n\n"
+            footer = "\n\n━━━━━━━━━━━━\n📋 _Copy karo aur apply karo!_"
 
-        platform_name = "FIVERR" if platform == "fiverr" else "UPWORK"
+        else:  # match
+            result = analyze_job_match(job_desc)
+            header = "🎯 *JOB MATCH ANALYSIS*\n━━━━━━━━━━━━\n\n"
+            footer = "\n\n━━━━━━━━━━━━"
 
-        # Proposal send karo
-        result_msg = f"""
-✅ *{platform_name} PROPOSAL READY!*
-━━━━━━━━━━━━━━━━━━━━
+        await loading.delete()
 
-{proposal}
+        full_msg = header + result + footer
+        # Telegram 4096 char limit handle karo
+        if len(full_msg) > 4096:
+            await update.message.reply_text(header + result[:2000] + "...", parse_mode="Markdown")
+            await update.message.reply_text("..." + result[2000:] + footer, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(full_msg, parse_mode="Markdown")
 
-━━━━━━━━━━━━━━━━━━━━
-📋 _Copy karo aur paste karo!_
-"""
-        await update.message.reply_text(result_msg, parse_mode="Markdown")
-
-        # Follow-up options
-        keyboard = [
-            [
-                InlineKeyboardButton("🔄 Dobara Generate", callback_data=f"regen_{platform}"),
-                InlineKeyboardButton("📝 Naya Proposal", callback_data="new"),
-            ]
-        ]
+        keyboard = [[
+            InlineKeyboardButton("🔄 Dobara", callback_data=f"regen_{mode}"),
+            InlineKeyboardButton("🏠 Menu", callback_data="menu"),
+        ]]
         await update.message.reply_text(
             "Kya karna chahte ho?",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     except Exception as e:
-        await loading_msg.edit_text(
-            f"❌ Error aaya: {str(e)}\n\nDobara try karo /proposal"
-        )
-        logger.error(f"Proposal generation error: {e}")
-
-    return ConversationHandler.END
+        await loading.edit_text(f"❌ Error aaya: {str(e)}\n\nDobara try karo.")
+        logger.error(f"Error: {e}")
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline button clicks handle karo"""
     query = update.callback_query
     await query.answer()
 
-    if query.data == "new":
-        await query.edit_message_text("Theek hai! `/proposal` type karo naye proposal ke liye.")
-
-    elif query.data.startswith("regen_"):
-        platform = query.data.split("_")[1]
-        context.user_data["platform"] = platform
+    if query.data == "menu":
         await query.edit_message_text(
-            "📝 Job description dobara paste karo:",
+            "/proposal — Proposal\n/cover — Cover letter\n/match — Job match"
         )
-        return GETTING_JOB_DESC
+    elif query.data.startswith("regen_"):
+        mode = query.data.split("_", 1)[1]
+        context.user_data["mode"] = mode
+        await query.edit_message_text("Job description dobara paste karo:")
+        return GETTING_INPUT
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancel current operation"""
-    await update.message.reply_text(
-        "❌ Cancel ho gaya.\n\nNaya proposal ke liye /proposal type karo."
-    )
+    await update.message.reply_text("❌ Cancel.\n\n/proposal, /cover ya /match type karo.")
     return ConversationHandler.END
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Help message"""
-    help_text = """
-🤖 *Proposal Bot Help*
+    await update.message.reply_text("""
+🤖 *Commands:*
 
-*Kaise use karein:*
-1. `/proposal` type karo
-2. Platform choose karo (Fiverr ya Upwork)
-3. Job description paste karo
-4. Budget batao
-5. ✅ Proposal copy karo!
+*/proposal* — Fiverr ya Upwork proposal
+*/cover* — Cover letter banao
+*/match* — Job kitna match karta hai
+*/cancel* — Cancel karo
 
-*Tips:*
-• Poori job description copy karo — AI better proposal banega
-• Budget "Not specified" bhi likh sakte ho
-• Ek job ke liye multiple proposals generate kar sakte ho
-
-*Commands:*
-/proposal — Naya proposal
-/help — Yeh message
-/cancel — Current step cancel
-
-_Made by Raghuveer Bhati 🚀_
-"""
-    await update.message.reply_text(help_text, parse_mode="Markdown")
+*Cover letter tip:*
+Pehli line mein company name likho, phir job description paste karo!
+""", parse_mode="Markdown")
 
 
 # ──────────────────────────────────────────
-# MAIN — BOT CHALAAO
+# MAIN
 # ──────────────────────────────────────────
 def main():
+    if not TELEGRAM_TOKEN or not ANTHROPIC_KEY:
+        raise ValueError("TELEGRAM_TOKEN aur ANTHROPIC_KEY Railway Variables mein set karo!")
+
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # Conversation handler
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("proposal", proposal_start)],
+        entry_points=[
+            CommandHandler("proposal", proposal_start),
+            CommandHandler("cover", cover_start),
+            CommandHandler("match", match_start),
+        ],
         states={
-            CHOOSING_PLATFORM: [CallbackQueryHandler(platform_chosen)],
-            GETTING_JOB_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND, job_desc_received)],
-            GETTING_BUDGET:    [MessageHandler(filters.TEXT & ~filters.COMMAND, budget_received)],
+            CHOOSING_TYPE: [CallbackQueryHandler(type_chosen)],
+            GETTING_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, input_received)],
+            GETTING_BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, budget_received)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
@@ -317,8 +407,7 @@ def main():
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("🤖 Raghuveer's Proposal Bot chal raha hai...")
-    print("Telegram pe /start type karo!")
+    print("🤖 Raghuveer's Job Bot chal raha hai!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
