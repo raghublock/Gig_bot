@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 """
-🤖 Raghuveer's AI Job Bot v4.0
-FREE - Google Gemini API use karta hai
+🤖 Raghu's AI Job Bot v5.0
+FREE - Google Gemini API
 Features:
+- Latest jobs ONLY (24 hours filter)
 - Indeed + LinkedIn job search
+- Real-time job alerts
 - Cover letter generator
 - Job match analysis
+- All roles including freelance + sponsorship
 """
 
 import os
 import logging
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, ConversationHandler, filters
+    CallbackQueryHandler, ContextTypes, ConversationHandler,
+    filters, JobQueue
 )
 
 # ──────────────────────────────────────────
@@ -25,17 +30,52 @@ from telegram.ext import (
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_KEY     = os.environ.get("GEMINI_KEY")
 
-JOB_ROLES = [
-    "React Developer",
-    "Node.js Developer",
-    "Python Developer",
-    "Full Stack Developer",
-    "Blockchain Web3 Developer",
-    "AI ML Developer"
-]
+# Alert interval — har 2 ghante mein check karega
+ALERT_INTERVAL = 7200  # seconds
 
 # ──────────────────────────────────────────
-# RAGHUVEER KA RESUME
+# JOB ROLES — Raghuveer ke profile se
+# ──────────────────────────────────────────
+JOB_ROLES = {
+    "💻 Web Dev": [
+        "React Developer",
+        "Node.js Developer",
+        "Full Stack Developer",
+        "Frontend Developer",
+        "JavaScript Developer",
+    ],
+    "🐍 Python/AI": [
+        "Python Developer",
+        "AI ML Developer",
+        "Streamlit Developer",
+        "Python Automation",
+        "Data Analyst",
+    ],
+    "⛓️ Blockchain": [
+        "Blockchain Developer",
+        "Web3 Developer",
+        "Solidity Developer",
+        "DeFi Developer",
+        "Crypto Tester",
+    ],
+    "📊 Freelance": [
+        "Data Entry",
+        "Data Analyst",
+        "Web Scraping",
+        "Virtual Assistant",
+        "Content Writer",
+    ],
+    "🤝 Sponsorship": [
+        "Blockchain Testnet",
+        "Web3 Ambassador",
+        "Crypto Airdrop Tester",
+        "DeFi Beta Tester",
+        "Brand Ambassador Tech",
+    ]
+}
+
+# ──────────────────────────────────────────
+# RAGHUVEER KA COMPLETE RESUME
 # ──────────────────────────────────────────
 RESUME = """
 NAME: Raghuveer Bhati
@@ -43,56 +83,72 @@ LOCATION: Bikaner, Rajasthan, India
 PORTFOLIO: https://raghublock.github.io/portfolio
 GITHUB: https://github.com/raghublock
 LINKEDIN: https://in.linkedin.com/in/raghuveer-bhati-94a37aa9
+
 TITLE: Full Stack Web Developer | Blockchain Tester | AI Tools Developer
 
 EDUCATION:
-- B.Tech in Electronics & Communication Engineering (ECE)
-- B.Sc in Biology | B.Ed in Science
+- B.Tech ECE | B.Sc Biology | B.Ed Science
 - RSCIT Certified (VMOU 2017)
 
-EXPERIENCE:
-1. Freelancer – Website Developer (Sep 2024 - Present)
-   - AI Background Remover (Python + Rembg)
-   - AI PDF Editor with OCR (Python + Streamlit) — aipdfedit.streamlit.app
-   - Library Fee Management System (React + TailwindCSS + Cloudflare)
-   - Student Fees Dashboard (HTML/JS + Cloudflare Workers)
-   - Veggie Shop E-commerce (Node.js + EJS + Render)
-   - Hindi & English Typing Masters (HTML/CSS/JS)
-   - PDF Compression + Image Master Tool
-   - NoteList PWA with Firebase
+PROJECTS (with technologies):
+1. Laxmi Library Fee System
+   Tech: React.js, TailwindCSS, Cloudflare
+   Link: raghublock.github.io/library-fee/
 
-2. Freelancer – Web3 & Blockchain (Aug 2019 - Present)
-   - Ecosystem tester: Aptos, Arbitrum, Sui, Linea
-   - IPFS decentralized hosting
-   - Smart contract interaction & dApps testing
-   - Crypto futures trading & on-chain analysis
+2. Student Fees Management Dashboard
+   Tech: HTML, JavaScript, Cloudflare Workers
+   Link: student-fees-management.pages.dev/
 
-3. Accounts Clerk – Army Headquarters (1 year)
-   - Financial ledgers & audit management
-   - Zero-error fund management
+3. Veggie Shop (E-commerce)
+   Tech: HTML, CSS, Node.js, Render
+   Link: veggie-shop-lgvy.onrender.com/
+
+4. AI PDF Editor
+   Tech: Python, Streamlit, OCR
+   Link: aipdfedit.streamlit.app/
+
+5. Free BG Remover
+   Tech: HTML, JavaScript, Python API (Rembg)
+   Link: raghublock.github.io/free-bg-remover/
+
+6. Image Master Tool
+   Tech: HTML, CSS, JavaScript, Canvas API
+   Link: raghublock.github.io/image-master-tool/
+
+7. PDF Compressor
+   Tech: HTML, CSS, JavaScript
+   Link: raghublock.github.io/PDF_Compress/
+
+8. Hindi Typing Master
+   Tech: HTML, CSS, JavaScript
+   Link: raghublock.github.io/hindi-typing-master/
+
+9. Typing Master Pro
+   Tech: HTML, CSS, JavaScript
+   Link: raghublock.github.io/typing-master-pro/
+
+10. NoteList PWA
+    Tech: HTML, CSS, JavaScript, Firebase
+    Link: raghublock.github.io/notelist/
 
 SKILLS:
-- Frontend: React.js, Next.js, HTML5, CSS3, TailwindCSS, JavaScript
+- Frontend: React.js, Next.js, HTML5, CSS3, TailwindCSS, JavaScript, Canvas API
 - Backend: Node.js, Express.js, EJS
 - Database: MongoDB, PostgreSQL, Firebase, Cloudflare Workers
-- AI/ML: Python, Streamlit, OpenAI API, OCR
-- Blockchain: Web3.js, IPFS, Rust (Intermediate)
-- Tools: Git, GitHub, Vercel, Render, GitHub Pages
+- AI/ML: Python, Streamlit, OCR, Rembg API
+- Blockchain: Web3.js, IPFS, Aptos, Arbitrum, Sui, Linea, Rust
+- Tools: Git, GitHub, Vercel, Render, GitHub Pages, Streamlit Cloud
 
-LIVE PROJECTS:
-- Library Fee System: raghublock.github.io/library-fee/
-- Student Fees: student-fees-management.pages.dev/
-- AI PDF Editor: aipdfedit.streamlit.app/
-- Veggie Shop: veggie-shop-lgvy.onrender.com/
-- BG Remover: raghublock.github.io/free-bg-remover/
-- Hindi Typing Master: raghublock.github.io/hindi-typing-master/
-- NoteList: raghublock.github.io/notelist/
+EXPERIENCE:
+- Freelancer Web Developer (Sep 2024 - Present)
+- Web3 & Blockchain Tester (Aug 2019 - Present)
+- Accounts Clerk, Army Headquarters (1 year)
 """
 
 # ──────────────────────────────────────────
 # CONVERSATION STATES
 # ──────────────────────────────────────────
-GETTING_INPUT, CHOOSING_ROLE = range(2)
+GETTING_INPUT, CHOOSING_CATEGORY, CHOOSING_ROLE = range(3)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -101,45 +157,52 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────
-# GEMINI AI SETUP
+# GEMINI SETUP
 # ──────────────────────────────────────────
-def get_gemini():
-    genai.configure(api_key=GEMINI_KEY)
-    return genai.GenerativeModel("gemini-1.5-flash")  # Free model
-
 def ask_gemini(prompt: str) -> str:
-    model = get_gemini()
+    genai.configure(api_key=GEMINI_KEY)
+    model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
 
 # ──────────────────────────────────────────
-# JOB SEARCH
+# JOB SEARCH — LATEST ONLY
 # ──────────────────────────────────────────
 
-def search_indeed(role: str, location: str) -> list:
+def search_indeed_latest(role: str, location: str) -> list:
+    """Indeed se SIRF latest jobs (last 24 hours)"""
     jobs = []
     try:
         query = role.replace(" ", "+")
         loc = location.replace(" ", "+")
-        url = f"https://in.indeed.com/jobs?q={query}&l={loc}&sort=date&limit=5"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        res = requests.get(url, headers=headers, timeout=10)
+        # fromage=1 = last 24 hours only
+        url = f"https://in.indeed.com/jobs?q={query}&l={loc}&sort=date&fromage=1&limit=5"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        res = requests.get(url, headers=headers, timeout=12)
         soup = BeautifulSoup(res.text, "html.parser")
         cards = soup.find_all("div", class_="job_seen_beacon")[:4]
+
         for card in cards:
             try:
                 title = card.find("h2", class_="jobTitle")
                 company = card.find("span", {"data-testid": "company-name"})
                 loc_el = card.find("div", {"data-testid": "text-location"})
+                date_el = card.find("span", {"data-testid": "myJobsStateDate"})
                 link_el = card.find("a", class_="jcs-JobTitle")
                 jk = link_el.get("data-jk", "") if link_el else ""
                 t = title.get_text(strip=True) if title else ""
+                posted = date_el.get_text(strip=True) if date_el else "Today"
+
                 if t:
                     jobs.append({
                         "source": "Indeed 🟡",
                         "title": t,
                         "company": company.get_text(strip=True) if company else "N/A",
                         "location": loc_el.get_text(strip=True) if loc_el else location,
+                        "posted": posted,
                         "link": f"https://in.indeed.com/viewjob?jk={jk}" if jk else "https://in.indeed.com"
                     })
             except:
@@ -149,29 +212,39 @@ def search_indeed(role: str, location: str) -> list:
     return jobs
 
 
-def search_linkedin(role: str, location: str) -> list:
+def search_linkedin_latest(role: str, location: str) -> list:
+    """LinkedIn se SIRF latest jobs (last 24 hours)"""
     jobs = []
     try:
         query = role.replace(" ", "%20")
         loc = location.replace(" ", "%20")
-        url = f"https://www.linkedin.com/jobs/search/?keywords={query}&location={loc}&sortBy=DD"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        res = requests.get(url, headers=headers, timeout=10)
+        # f_TPR=r86400 = last 24 hours
+        url = f"https://www.linkedin.com/jobs/search/?keywords={query}&location={loc}&sortBy=DD&f_TPR=r86400"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        res = requests.get(url, headers=headers, timeout=12)
         soup = BeautifulSoup(res.text, "html.parser")
         cards = soup.find_all("div", class_="base-card")[:4]
+
         for card in cards:
             try:
                 title = card.find("h3", class_="base-search-card__title")
                 company = card.find("h4", class_="base-search-card__subtitle")
                 loc_el = card.find("span", class_="job-search-card__location")
+                date_el = card.find("time")
                 link_el = card.find("a", class_="base-card__full-link")
                 t = title.get_text(strip=True) if title else ""
+                posted = date_el.get("datetime", "Today") if date_el else "Today"
+
                 if t:
                     jobs.append({
                         "source": "LinkedIn 🔵",
                         "title": t,
                         "company": company.get_text(strip=True) if company else "N/A",
                         "location": loc_el.get_text(strip=True) if loc_el else location,
+                        "posted": posted,
                         "link": link_el.get("href", "https://linkedin.com/jobs") if link_el else "https://linkedin.com/jobs"
                     })
             except:
@@ -183,62 +256,97 @@ def search_linkedin(role: str, location: str) -> list:
 
 def format_jobs(jobs: list) -> str:
     if not jobs:
-        return "❌ Koi job nahi mili."
+        return "❌ Abhi koi latest job nahi mili."
     text = ""
     for i, j in enumerate(jobs, 1):
         text += f"{j['source']} *{i}. {j['title']}*\n"
         text += f"   🏢 {j['company']}\n"
         text += f"   📍 {j['location']}\n"
+        text += f"   🕐 {j['posted']}\n"
         text += f"   🔗 [Apply Here]({j['link']})\n\n"
     return text
 
 
 # ──────────────────────────────────────────
-# AI FUNCTIONS (GEMINI - FREE!)
+# AUTO ALERT — Har 2 ghante mein
+# ──────────────────────────────────────────
+async def auto_job_alert(context):
+    """Automatic job alert — har 2 ghante mein latest jobs bhejta hai"""
+    chat_id = context.job.chat_id
+
+    all_jobs = []
+    # Top roles check karo
+    alert_roles = [
+        "Full Stack Developer",
+        "React Developer",
+        "Python Developer",
+        "Blockchain Developer",
+        "Data Analyst"
+    ]
+
+    for role in alert_roles[:3]:
+        all_jobs.extend(search_indeed_latest(role, "remote")[:1])
+        all_jobs.extend(search_linkedin_latest(role, "India")[:1])
+
+    # Duplicates hatao
+    seen, unique = set(), []
+    for j in all_jobs:
+        key = j["title"] + j["company"]
+        if key not in seen:
+            seen.add(key)
+            unique.append(j)
+
+    if unique:
+        now = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        msg = f"🔔 *LATEST JOB ALERT!*\n_{now}_\n\n"
+        msg += format_jobs(unique[:5])
+        msg += "💡 _/cover type karo cover letter ke liye!_"
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=msg,
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+
+
+# ──────────────────────────────────────────
+# AI FUNCTIONS
 # ──────────────────────────────────────────
 
 def generate_cover_letter(job_desc: str, company: str = "") -> str:
-    prompt = f"""
+    return ask_gemini(f"""
 Write a professional cover letter as Raghuveer Bhati.
 
-His resume:
-{RESUME}
+Resume: {RESUME}
 
-Job details:
-JOB DESCRIPTION: {job_desc}
+JOB: {job_desc}
 COMPANY: {company or "the company"}
 
-Requirements:
-- 3 paragraphs, 200-250 words total
+3 paragraphs, 200-250 words:
 - Para 1: Why excited about this specific role
-- Para 2: 2 specific relevant projects with live links
+- Para 2: 2 specific relevant projects with tech stack and live links
 - Para 3: What he'll bring + call to action
 - Include portfolio: https://raghublock.github.io/portfolio
 - Professional but genuine tone
-- Only output the cover letter, nothing else
-"""
-    return ask_gemini(prompt)
+Only output the cover letter.
+""")
 
 
 def analyze_match(job_desc: str) -> str:
-    prompt = f"""
+    return ask_gemini(f"""
 Analyze job match for Raghuveer Bhati.
+Resume: {RESUME}
+Job: {job_desc}
 
-His resume:
-{RESUME}
-
-Job description:
-{job_desc}
-
-Give exactly this format:
+Give exactly:
 1. Match Score: X%
-2. Top 3 matching skills/experience
-3. Any skill gaps
-4. Should apply? Yes/Maybe/No + one line reason
+2. Top 3 matching skills
+3. Skill gaps (if any)
+4. Apply? Yes/Maybe/No + reason
 
-Be direct and honest. Under 150 words total.
-"""
-    return ask_gemini(prompt)
+Under 150 words. Be direct.
+""")
 
 
 # ──────────────────────────────────────────
@@ -247,37 +355,109 @@ Be direct and honest. Under 150 words total.
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("""
-🤖 *Raghuveer's AI Job Bot v4.0*
+🤖 *Raghuveer's AI Job Bot v5.0*
 _Powered by Google Gemini — FREE!_
 
 *Commands:*
-/jobs — Indeed + LinkedIn jobs dhundo 🔍
+/jobs — Latest jobs dhundo 🔍
+/alert — Auto job alerts ON karo 🔔
 /cover — Cover letter banao 📝
 /match — Job match % check karo 🎯
+/stop — Alerts band karo
 /help — Help
 
 *Best Workflow:*
-1️⃣ /jobs → jobs dhundo
-2️⃣ Job description copy karo
-3️⃣ /cover → cover letter ready
+1️⃣ /alert → Auto alerts ON karo
+2️⃣ Naukri aate hi notification milegi!
+3️⃣ /cover → Cover letter ready
 4️⃣ Apply karo! ✅
 """, parse_mode="Markdown")
 
 
+async def alert_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Auto alert shuru karo"""
+    chat_id = update.effective_chat.id
+
+    # Pehle check karo already running hai ya nahi
+    current_jobs = context.job_queue.get_jobs_by_name(str(chat_id))
+    if current_jobs:
+        await update.message.reply_text(
+            "✅ *Alerts already ON hain!*\n\nHar 2 ghante mein latest jobs milenge.\n/stop se band karo.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Alert shuru karo
+    context.job_queue.run_repeating(
+        auto_job_alert,
+        interval=ALERT_INTERVAL,
+        first=10,  # 10 seconds mein pehla alert
+        chat_id=chat_id,
+        name=str(chat_id)
+    )
+
+    await update.message.reply_text("""
+🔔 *Job Alerts ON ho gaye!*
+
+✅ Har *2 ghante* mein latest jobs milenge
+✅ Indeed + LinkedIn dono check karega
+✅ Roles: Full Stack, React, Python, Blockchain, Data
+
+_Pehla alert 10 seconds mein aa raha hai..._
+
+/stop se alerts band kar sakte ho.
+""", parse_mode="Markdown")
+
+
+async def stop_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Alerts band karo"""
+    chat_id = update.effective_chat.id
+    jobs = context.job_queue.get_jobs_by_name(str(chat_id))
+
+    if jobs:
+        for job in jobs:
+            job.schedule_removal()
+        await update.message.reply_text("🔕 *Alerts band ho gaye!*\n\n/alert se dobara start kar sakte ho.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("ℹ️ Koi alert nahi chal raha.\n\n/alert se start karo.", parse_mode="Markdown")
+
+
 async def jobs_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manual job search"""
+    keyboard = []
+    for category in JOB_ROLES.keys():
+        keyboard.append([InlineKeyboardButton(category, callback_data=f"cat_{category}")])
+
+    await update.message.reply_text(
+        "🔍 *Category choose karo:*\n_(Sirf aaj ki latest jobs milegi!)_",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+    return CHOOSING_CATEGORY
+
+
+async def category_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    category = query.data.replace("cat_", "")
+    context.user_data["category"] = category
+    roles = JOB_ROLES.get(category, [])
+
     keyboard = []
     row = []
-    for i, role in enumerate(JOB_ROLES):
-        row.append(InlineKeyboardButton(role.split()[0], callback_data=f"role_{role}"))
+    for role in roles:
+        short = role.split()[0] + " " + role.split()[1] if len(role.split()) > 1 else role
+        row.append(InlineKeyboardButton(short, callback_data=f"role_{role}"))
         if len(row) == 2:
             keyboard.append(row)
             row = []
     if row:
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("🔍 Sab Roles", callback_data="role_all")])
+    keyboard.append([InlineKeyboardButton("🔍 Sab Roles", callback_data=f"role_all_{category}")])
 
-    await update.message.reply_text(
-        "🔍 *Kaunsi role ke liye jobs dhundhein?*",
+    await query.edit_message_text(
+        f"✅ *{category}*\n\nKaunsi role?",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -287,15 +467,22 @@ async def jobs_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def role_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    role = query.data.replace("role_", "")
-    context.user_data["search_role"] = role
+
+    data = query.data.replace("role_", "")
+    if data.startswith("all_"):
+        category = data.replace("all_", "")
+        context.user_data["search_roles"] = JOB_ROLES.get(category, [])
+        role_display = f"Sab {category} Roles"
+    else:
+        context.user_data["search_roles"] = [data]
+        role_display = data
 
     keyboard = [[
         InlineKeyboardButton("🌍 Remote", callback_data="loc_remote"),
         InlineKeyboardButton("🇮🇳 India", callback_data="loc_india"),
         InlineKeyboardButton("🌐 Dono", callback_data="loc_both"),
     ]]
-    role_display = "Sab Roles" if role == "all" else role
+
     await query.edit_message_text(
         f"✅ *{role_display}*\n\n📍 Location?",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -309,16 +496,16 @@ async def location_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     location = query.data.replace("loc_", "")
-    role = context.user_data.get("search_role", "Full Stack Developer")
+    roles = context.user_data.get("search_roles", ["Full Stack Developer"])
 
+    now = datetime.now().strftime("%d %b, %I:%M %p")
     await query.edit_message_text(
-        "🔍 *Jobs dhundh raha hoon...*\n_Indeed + LinkedIn — 20-30 sec_",
+        f"🔍 *Latest jobs dhundh raha hoon...*\n_Sirf aaj ki jobs — {now}_\n_20-30 seconds..._",
         parse_mode="Markdown"
     )
 
     try:
         all_jobs = []
-        roles = JOB_ROLES[:3] if role == "all" else [role]
         locations = []
         if location == "remote":
             locations = ["remote"]
@@ -327,10 +514,10 @@ async def location_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             locations = ["remote", "India"]
 
-        for r in roles[:2]:
+        for r in roles[:3]:
             for loc in locations:
-                all_jobs.extend(search_indeed(r, loc)[:2])
-                all_jobs.extend(search_linkedin(r, loc)[:2])
+                all_jobs.extend(search_indeed_latest(r, loc)[:2])
+                all_jobs.extend(search_linkedin_latest(r, loc)[:2])
 
         # Duplicates hatao
         seen, unique = set(), []
@@ -340,19 +527,21 @@ async def location_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 seen.add(key)
                 unique.append(j)
 
-        unique = unique[:8]
+        unique = unique[:10]
 
         if unique:
-            msg = f"🎯 *{len(unique)} Jobs Mili!*\n\n"
+            msg = f"🎯 *{len(unique)} Latest Jobs Mili!*\n_Aaj ki — {now}_\n\n"
             msg += format_jobs(unique)
             msg += "💡 _Job copy karo → /cover se cover letter banao!_"
         else:
-            msg = """❌ *Jobs nahi mili — manually dekho:*
+            msg = f"""❌ *Abhi koi new job nahi mili.*
+_(Last 24 hours mein)_
 
-🔵 [LinkedIn Jobs](https://www.linkedin.com/jobs/search/?keywords=full+stack+developer&location=India)
-🟡 [Indeed India](https://in.indeed.com/jobs?q=react+developer&l=remote)
+Manually dekho:
+🔵 [LinkedIn Latest](https://www.linkedin.com/jobs/search/?keywords=full+stack+developer&location=India&sortBy=DD&f_TPR=r86400)
+🟡 [Indeed Latest](https://in.indeed.com/jobs?q=react+developer&l=remote&sort=date&fromage=1)
 
-Job description copy karo → /cover type karo! ✅"""
+Ya /alert se auto notifications ON karo! 🔔"""
 
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -364,6 +553,7 @@ Job description copy karo → /cover type karo! ✅"""
         keyboard = [[
             InlineKeyboardButton("🔄 Dobara Search", callback_data="restart"),
             InlineKeyboardButton("📝 Cover Letter", callback_data="goto_cover"),
+            InlineKeyboardButton("🔔 Auto Alert", callback_data="goto_alert"),
         ]]
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -451,9 +641,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "restart":
-        await query.edit_message_text("/jobs type karo dobara search ke liye!")
+        await query.edit_message_text("/jobs type karo!")
     elif query.data == "goto_cover":
-        await query.edit_message_text("/cover type karo cover letter ke liye!")
+        await query.edit_message_text("/cover type karo!")
+    elif query.data == "goto_alert":
+        await query.edit_message_text("/alert type karo auto notifications ke liye! 🔔")
     elif query.data.startswith("regen_"):
         mode = query.data.split("_", 1)[1]
         context.user_data["mode"] = mode
@@ -462,7 +654,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Cancel.\n\n/jobs, /cover, /match type karo.")
+    await update.message.reply_text("❌ Cancel.\n\n/jobs, /cover, /match, /alert type karo.")
     return ConversationHandler.END
 
 
@@ -470,18 +662,27 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("""
 🤖 *Commands:*
 
-*/jobs* — Indeed + LinkedIn jobs dhundo
+*/jobs* — Latest jobs dhundo (aaj ki)
+*/alert* — Auto alerts ON karo (har 2 ghante)
+*/stop* — Alerts band karo
 */cover* — Cover letter banao
 */match* — Job match % check karo
 */cancel* — Cancel
 
-*Workflow:*
-1️⃣ /jobs → role + location choose karo
-2️⃣ Job description copy karo
-3️⃣ /cover → paste karo → letter ready!
-4️⃣ Apply karo ✅
+*Job Categories:*
+💻 Web Dev — React, Node, Full Stack
+🐍 Python/AI — Python, Data Analyst
+⛓️ Blockchain — Web3, DeFi, Crypto
+📊 Freelance — Data Entry, VA
+🤝 Sponsorship — Testnet, Ambassador
 
-_Powered by Google Gemini — FREE! 🆓_
+*Best Workflow:*
+1️⃣ /alert → Auto notifications ON
+2️⃣ Job aate hi Telegram pe milega!
+3️⃣ /cover → Cover letter ready
+4️⃣ Apply! ✅
+
+_FREE — Powered by Google Gemini 🆓_
 """, parse_mode="Markdown")
 
 
@@ -497,6 +698,7 @@ def main():
     job_conv = ConversationHandler(
         entry_points=[CommandHandler("jobs", jobs_start)],
         states={
+            CHOOSING_CATEGORY: [CallbackQueryHandler(category_chosen, pattern="^cat_")],
             CHOOSING_ROLE: [
                 CallbackQueryHandler(role_chosen, pattern="^role_"),
                 CallbackQueryHandler(location_chosen, pattern="^loc_"),
@@ -518,12 +720,14 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("alert", alert_start))
+    app.add_handler(CommandHandler("stop", stop_alerts))
     app.add_handler(job_conv)
     app.add_handler(content_conv)
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("🤖 Raghuveer's Job Bot v4.0 chal raha hai!")
-    print("FREE - Powered by Google Gemini!")
+    print("🤖 Raghuveer's Job Bot v5.0 chal raha hai!")
+    print("FREE - Gemini | Latest Jobs | Auto Alerts!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
