@@ -1,4 +1,4 @@
 python-telegram-bot
-anthropic
+google-generativeai
 requests
 beautifulsoup4
