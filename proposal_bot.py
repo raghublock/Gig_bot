@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-🤖 Raghuveer's AI Job Bot v3.0
+🤖 Raghuveer's AI Job Bot v4.0
+FREE - Google Gemini API use karta hai
 Features:
 - Indeed + LinkedIn job search
 - Cover letter generator
@@ -11,18 +12,18 @@ import os
 import logging
 import requests
 from bs4 import BeautifulSoup
+import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, ConversationHandler, filters
 )
-import anthropic
 
 # ──────────────────────────────────────────
 # CONFIG
 # ──────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ANTHROPIC_KEY  = os.environ.get("ANTHROPIC_KEY")
+GEMINI_KEY     = os.environ.get("GEMINI_KEY")
 
 JOB_ROLES = [
     "React Developer",
@@ -98,6 +99,18 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────
+# GEMINI AI SETUP
+# ──────────────────────────────────────────
+def get_gemini():
+    genai.configure(api_key=GEMINI_KEY)
+    return genai.GenerativeModel("gemini-1.5-flash")  # Free model
+
+def ask_gemini(prompt: str) -> str:
+    model = get_gemini()
+    response = model.generate_content(prompt)
+    return response.text
 
 # ──────────────────────────────────────────
 # JOB SEARCH
@@ -181,53 +194,51 @@ def format_jobs(jobs: list) -> str:
 
 
 # ──────────────────────────────────────────
-# AI FUNCTIONS
+# AI FUNCTIONS (GEMINI - FREE!)
 # ──────────────────────────────────────────
 
 def generate_cover_letter(job_desc: str, company: str = "") -> str:
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": f"""
-Write as Raghuveer Bhati. Resume:
+    prompt = f"""
+Write a professional cover letter as Raghuveer Bhati.
+
+His resume:
 {RESUME}
 
-Cover letter for:
-JOB: {job_desc}
+Job details:
+JOB DESCRIPTION: {job_desc}
 COMPANY: {company or "the company"}
 
-3 paragraphs, 200-250 words:
+Requirements:
+- 3 paragraphs, 200-250 words total
 - Para 1: Why excited about this specific role
-- Para 2: 2 specific relevant projects with results
-- Para 3: What you'll bring + call to action
-Include portfolio link naturally. Professional tone.
-Only output the cover letter.
-"""}])
-    return message.content[0].text
+- Para 2: 2 specific relevant projects with live links
+- Para 3: What he'll bring + call to action
+- Include portfolio: https://raghublock.github.io/portfolio
+- Professional but genuine tone
+- Only output the cover letter, nothing else
+"""
+    return ask_gemini(prompt)
 
 
 def analyze_match(job_desc: str) -> str:
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=500,
-        messages=[{"role": "user", "content": f"""
-Raghuveer's resume:
+    prompt = f"""
+Analyze job match for Raghuveer Bhati.
+
+His resume:
 {RESUME}
 
-Analyze this job:
+Job description:
 {job_desc}
 
-Give:
-1. Match Score (0-100%)
+Give exactly this format:
+1. Match Score: X%
 2. Top 3 matching skills/experience
-3. Any gaps
-4. Apply? Yes/Maybe/No + reason
+3. Any skill gaps
+4. Should apply? Yes/Maybe/No + one line reason
 
-Be direct and honest. Under 150 words.
-"""}])
-    return message.content[0].text
+Be direct and honest. Under 150 words total.
+"""
+    return ask_gemini(prompt)
 
 
 # ──────────────────────────────────────────
@@ -236,7 +247,8 @@ Be direct and honest. Under 150 words.
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("""
-🤖 *Raghuveer's AI Job Bot v3.0*
+🤖 *Raghuveer's AI Job Bot v4.0*
+_Powered by Google Gemini — FREE!_
 
 *Commands:*
 /jobs — Indeed + LinkedIn jobs dhundo 🔍
@@ -256,8 +268,7 @@ async def jobs_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     row = []
     for i, role in enumerate(JOB_ROLES):
-        emoji = "⚛️🟢🐍🔷⛓️🤖".split()[i] if i < 6 else "💼"
-        row.append(InlineKeyboardButton(f"{role.split()[0]}", callback_data=f"role_{role}"))
+        row.append(InlineKeyboardButton(role.split()[0], callback_data=f"role_{role}"))
         if len(row) == 2:
             keyboard.append(row)
             row = []
@@ -286,7 +297,7 @@ async def role_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]]
     role_display = "Sab Roles" if role == "all" else role
     await query.edit_message_text(
-        f"✅ *{role_display}*\n\n📍 Location preference?",
+        f"✅ *{role_display}*\n\n📍 Location?",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -338,7 +349,7 @@ async def location_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             msg = """❌ *Jobs nahi mili — manually dekho:*
 
-🔵 [LinkedIn Jobs India](https://www.linkedin.com/jobs/search/?keywords=full+stack+developer&location=India)
+🔵 [LinkedIn Jobs](https://www.linkedin.com/jobs/search/?keywords=full+stack+developer&location=India)
 🟡 [Indeed India](https://in.indeed.com/jobs?q=react+developer&l=remote)
 
 Job description copy karo → /cover type karo! ✅"""
@@ -363,7 +374,7 @@ Job description copy karo → /cover type karo! ✅"""
     except Exception as e:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="❌ Error aaya. /jobs dobara try karo ya manually linkedin.com/jobs dekho."
+            text="❌ Error aaya. /jobs dobara try karo."
         )
         logger.error(f"Search error: {e}")
 
@@ -393,7 +404,7 @@ async def input_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     job_desc = update.message.text
 
     loading = await update.message.reply_text(
-        "⏳ *AI kaam kar raha hai... 10-15 sec*",
+        "⏳ *Gemini AI kaam kar raha hai... 10-15 sec*",
         parse_mode="Markdown"
     )
 
@@ -423,7 +434,10 @@ async def input_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🔄 Dobara", callback_data=f"regen_{mode}"),
             InlineKeyboardButton("🔍 Jobs Dhundo", callback_data="restart"),
         ]]
-        await update.message.reply_text("Kya karna chahte ho?", reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text(
+            "Kya karna chahte ho?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     except Exception as e:
         await loading.edit_text(f"❌ Error: {str(e)}\n\nDobara try karo.")
@@ -466,6 +480,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 2️⃣ Job description copy karo
 3️⃣ /cover → paste karo → letter ready!
 4️⃣ Apply karo ✅
+
+_Powered by Google Gemini — FREE! 🆓_
 """, parse_mode="Markdown")
 
 
@@ -473,8 +489,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # ──────────────────────────────────────────
 def main():
-    if not TELEGRAM_TOKEN or not ANTHROPIC_KEY:
-        raise ValueError("TELEGRAM_TOKEN aur ANTHROPIC_KEY Railway Variables mein set karo!")
+    if not TELEGRAM_TOKEN or not GEMINI_KEY:
+        raise ValueError("TELEGRAM_TOKEN aur GEMINI_KEY Railway Variables mein set karo!")
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
@@ -506,7 +522,8 @@ def main():
     app.add_handler(content_conv)
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("🤖 Raghuveer's Job Bot v3.0 chal raha hai!")
+    print("🤖 Raghuveer's Job Bot v4.0 chal raha hai!")
+    print("FREE - Powered by Google Gemini!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
